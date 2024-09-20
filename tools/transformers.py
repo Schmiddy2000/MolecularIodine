@@ -3,8 +3,6 @@ import numpy as np
 from copy import copy
 from typing import List, Tuple, Optional
 
-from data.test_data.extract_test_data import y_fit
-
 
 def channel_to_wave_length(channel_array: np.array) -> np.array:
     I = 395.164
