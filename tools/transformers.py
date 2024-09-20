@@ -1,7 +1,9 @@
 # Imports
+from turtledemo.penrose import start
+
 import numpy as np
 from copy import copy
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 
 def channel_to_wave_length(channel_array: np.array) -> np.array:
@@ -45,3 +47,19 @@ def slice_measurement_data(x_data: np.array,
         stop_index -= 1
 
     return x_data[start_index:stop_index], y_data[start_index:stop_index]
+
+
+def get_slice_indices(data: Union[np.array, List],
+                      min_value: Union[int, float],
+                      max_value: Union[int, float]) -> Tuple[int, int]:
+
+    start_index = 0
+    stop_index = len(data) - 1
+
+    while data[start_index] < min_value:
+        start_index += 1
+
+    while data[stop_index] > max_value:
+        stop_index -= 1
+
+    return start_index, stop_index
