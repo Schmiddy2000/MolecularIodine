@@ -171,14 +171,19 @@ _, combined_isolation = linearize_count_dips_both_lamps(23, False)
 
 normalization_factor = np.max(combined_isolation) - np.min(combined_isolation)
 
+dip_positions = np.array([])
+
 plt.figure(figsize=(12, 3))
 plt.title('Comparison of the isolated absorption spectra', fontsize=16)
 plt.xlabel('Wave length in [nm]', fontsize=13)
 plt.ylabel('Normalized intensity', fontsize=13)
 
-plt.plot(wave_length_array, led_isolation / normalization_factor, label='LED lamp')
-plt.plot(wave_length_array, halogen_isolation / normalization_factor, label='Halogen lamp')
-plt.plot(wave_length_array, combined_isolation / normalization_factor, label='Combined', c='black', alpha=0.3)
+plt.plot(wave_length_array, (led_isolation + abs(min(combined_isolation))) / normalization_factor,
+         label='LED lamp')
+plt.plot(wave_length_array, (halogen_isolation + abs(min(combined_isolation))) / normalization_factor,
+         label='Halogen lamp')
+plt.plot(wave_length_array, (combined_isolation + abs(min(combined_isolation))) / normalization_factor,
+         label='Combined', c='black', alpha=0.3)
 
 plt.legend(loc='lower right')
 plt.tight_layout()
