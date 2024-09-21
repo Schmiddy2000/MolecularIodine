@@ -1,6 +1,10 @@
+# -*- coding: utf-8 -*-
+
 import numpy as np
 from scipy import odr
 import matplotlib.pyplot as plt
+
+#from data.test_data.extract_test_data import wave_lengths
 
 # Pixel positions (independent variable)
 pixel2 = np.array([ 50.4, 217, 841, 1027.3, 1040.3, 1102.8, 1106.4])
@@ -26,7 +30,7 @@ model = odr.Model(third_order_poly)
 data = odr.RealData(pixel2, wavel2, sx=delta_pixel2, sy=delta_wavel2)
 
 # Initial parameter estimates
-beta0 = [400, 0.1, 0, 0]
+beta0 = [400, 0.1, 1e-6, 1e-9]
 
 # Create an ODR object
 odr_instance = odr.ODR(data, model, beta0=beta0)
@@ -59,6 +63,13 @@ print(f"C3  = {parameters[3]:.6e} +- {param_std_dev[3]:.6e}")
 # Assess fit quality
 print(f"\nSum of squares of residuals: {output.sum_square}")
 print(f"Reduced chi-squared: {output.res_var}")
+fitted_wavel2 = third_order_poly(parameters, pixel2)
+
+ss_res = np.sum((wavel2 - fitted_wavel2) ** 2)  # Sum of squares of residuals
+ss_tot = np.sum((wavel2 - np.mean(wavel2)) ** 2)  # Total sum of squares
+r_squared = 1 - (ss_res / ss_tot)
+
+print(f"R: {r_squared:.6f}")
 
 
 def calibrate_pixel(p):
@@ -85,13 +96,20 @@ def calibrate_pixel(p):
 # Generate a range of pixel values for plotting
 p_fit = np.linspace(min(pixel2), max(pixel2), 500)
 w_fit = third_order_poly(parameters, p_fit)
-
+#wavelength, wavelength_uncertainty = calibrate_pixel()
+w_uncertainties = []
+for p in p_fit:
+    _, unc = calibrate_pixel(p)
+    w_uncertainties.append(unc)
+w_uncertainties = np.array(w_uncertainties)
 # Plot data points with error bars
 plt.errorbar(pixel2, wavel2, xerr=delta_pixel2, yerr=delta_wavel2, fmt='o', label='Data with uncertainties')
 
 # Plot the fitted curve
 plt.plot(p_fit, w_fit, 'r-', label='ODR Fit')
+plt.fill_between(p_fit, w_fit - w_uncertainties, w_fit + w_uncertainties, color='r', alpha=0.2, label='Uncertainty')
 
+plt.xlabel('Pixel')
 plt.xlabel('Pixel')
 plt.ylabel('Wavelength (nm)')
 plt.legend()
