@@ -2,6 +2,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import stats
+from scipy.optimize import curve_fit
+from scipy.constants import c, h
 
 from tools.reader import extract_data
 from tools.transformers import channel_to_wave_length, get_slice_indices, averager
@@ -298,43 +300,84 @@ def automated_dip_analysis():
             peaks.append(wave_lengths[i])
             peak_counts.append(counts[i])
 
-    dip_differences = np.diff(dips, prepend=dips[0])[1:]
-    peak_differences = np.diff(peaks, prepend=dips[0])[1:]
+    # Convert dip differences to energy differences
+    # dips = 1e-9 * np.array(dips)
+    dip_energies = 6.242e18 * h * c / (1e-9 * np.array(dips))
+    dip_frequencies = c / (1e-9 * np.array(dips)) * 1e-14
 
-    dip_arange = np.arange(len(dip_differences))
-    peak_arange = np.arange(len(peak_differences))
+    # Compute energy differences
+    # dip_differences = np.diff(dip_energies, prepend=dips[0])[1:]
+    dip_differences = np.diff(dip_frequencies, prepend=dips[0])[1:]
+    # peak_differences = np.diff(peaks, prepend=dips[0])[1:]
 
-    delete_indices = [i for i in range(23, 34)] + [38, 39] + [50, 51, 52, 53]
+    # print('Dip positions in nm\n', dips)
+    # print('Dip position differences in nm\n', dip_differences)
+
+    # Convert dip differences to energy differences
+    # dip_differences = 1e-9 * dip_differences
+    # dip_differences = 6.242e18 * h * c / dip_differences
+
+    # Generate array of vibrational state indices
+    offset = 5
+    dip_arange = np.arange(len(dip_differences)) + offset
+    # peak_arange = np.arange(len(peak_differences))
+
+    # Indices of problematic dip positions and removing them from all dependent arrays
+    # delete_indices = [i for i in range(23, 34)] + [38, 39] + [50, 51, 52, 53]
+    delete_indices = np.array([i for i in range(23, 34)] + [39] + [51, 52, 53])
+
+    bad_dips = list(dip_differences[23:34]) + [dip_differences[39]] + list(dip_differences[51:54])
 
     dip_differences = np.delete(dip_differences, delete_indices)
-    peak_differences = np.delete(peak_differences, delete_indices)
     dip_arange = np.delete(dip_arange, delete_indices)
-    peak_arange = np.delete(peak_arange, delete_indices)
 
-    dip_slope, dip_intercept, dip_r_value, dip_p_value, dip_std_err = stats.linregress(dip_arange, dip_differences)
-    peak_slope, peak_intercept, peak_r_value, peak_p_value, peak_std_err = stats.linregress(peak_arange,
-                                                                                            peak_differences)
+    # peak_differences = np.delete(peak_differences, delete_indices)
+    # peak_arange = np.delete(peak_arange, delete_indices)
+
+    # dip_slope, dip_intercept, dip_r_value, dip_p_value, dip_std_err = stats.linregress(dip_arange, dip_differences)
+    # peak_slope, peak_intercept, peak_r_value, peak_p_value, peak_std_err = stats.linregress(peak_arange,
+    #                                                                                         peak_differences)
 
     # Regression line
     def lin_func(x, a, b):
         return a * x + b
 
+    def energy_difference(v, w_0, x_0):
+        return w_0 - 2 * w_0 * x_0 * (v + 1)
+
+    # Initial guess for the parameters (w_0, x_0)
+    initial_guess = [0, -0.02]
+
+    # Perform the curve fit
+    params, covariance = curve_fit(energy_difference, dip_arange, dip_differences, p0=initial_guess, maxfev=10000)
+
+    # Extract the fitted parameters
+    w_0_fitted, x_0_fitted = params
+    w_0_error, x_0_error = np.sqrt(np.diag(covariance))
+
+    print(f"Fitted parameters: w_0 = {round(w_0_fitted, 5)} ± {round(w_0_error, 5)},"
+          f" x_0 = {round(x_0_fitted, 5)} ± {round(x_0_error, 5)}")
+
     x_lin = np.linspace(-10, 60, 5)
 
-    plt.figure()
+    plt.figure(figsize=(12, 5))
 
     # plt.plot(wave_lengths, counts, c='k', label='average')
     # # plt.plot(wave_lengths, counts, c='y', label='no average', ls='--')
     # plt.scatter(dips, dip_counts, label='dips')
     # plt.scatter(peaks, peak_counts, label='peaks')
 
-    plt.plot(x_lin, lin_func(x_lin, dip_slope, dip_intercept))
-    plt.plot(x_lin, lin_func(x_lin, peak_slope, peak_intercept))
+    plt.fill_between(x_lin, energy_difference(x_lin, w_0_fitted + w_0_error, x_0_fitted + x_0_error),
+                     energy_difference(x_lin, w_0_fitted - w_0_error, x_0_fitted - x_0_error), ls='--', lw=0.5,
+                     color='r', alpha=0.2)
+    plt.plot(x_lin, energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1, label=r'')
+    plt.scatter(dip_arange, dip_differences, label='Data points')
 
-    plt.scatter(dip_arange, dip_differences)
-    plt.scatter(peak_arange, peak_differences)
+    plt.scatter(delete_indices + offset, bad_dips, label='Excluded dips')
 
+    plt.tight_layout()
     plt.legend()
+    # plt.xlim(-2, 55)
     plt.show()
 
 
