@@ -65,8 +65,8 @@ plt.axhline(y=De_cm1, color='r', linestyle='--', label='$D_e$')
 plt.axvline(x=x_e_angstrom, color='g', linestyle='--', label='$x_e$')
 
 
-plt.xlabel('Distance $x$ (A)')
-plt.ylabel('Potential energy $V(x)$ (cm$^{-1}$)')
+plt.xlabel(r'Distance $x$ in [$\AA$]')
+plt.ylabel('Potential energy $V(x)$ in [cm$^{-1}$]')
 plt.title('Morse potential for the I$_2$ molecule')
 
 plt.grid(True)

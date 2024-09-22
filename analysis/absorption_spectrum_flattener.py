@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.constants import c, h
+from scipy.odr import ODR, Model, RealData
 
 from tools.reader import extract_data
 from tools.transformers import channel_to_wave_length, get_slice_indices, averager
@@ -301,6 +302,7 @@ def automated_dip_analysis():
             peak_counts.append(counts[i])
 
     # Convert dip differences to energy differences
+    dips = dips[::-1]
     # dips = 1e-9 * np.array(dips)
     dip_energies = 6.242e18 * h * c / (1e-9 * np.array(dips))
     dip_frequencies = c / (1e-9 * np.array(dips)) * 1e-14
@@ -308,6 +310,7 @@ def automated_dip_analysis():
     # Compute energy differences
     # dip_differences = np.diff(dip_energies, prepend=dips[0])[1:]
     dip_differences = np.diff(dip_frequencies, prepend=dips[0])[1:]
+    dip_differences = np.array([abs(val) for val in dip_differences])
     # peak_differences = np.diff(peaks, prepend=dips[0])[1:]
 
     # print('Dip positions in nm\n', dips)
@@ -318,18 +321,21 @@ def automated_dip_analysis():
     # dip_differences = 6.242e18 * h * c / dip_differences
 
     # Generate array of vibrational state indices
-    offset = 5
+    offset = 3
     dip_arange = np.arange(len(dip_differences)) + offset
     # peak_arange = np.arange(len(peak_differences))
 
     # Indices of problematic dip positions and removing them from all dependent arrays
     # delete_indices = [i for i in range(23, 34)] + [38, 39] + [50, 51, 52, 53]
-    delete_indices = np.array([i for i in range(23, 34)] + [39] + [51, 52, 53])
+    delete_indices = np.array([i for i in range(21, 32)] + [15] + [1, 2, 3])
 
-    bad_dips = list(dip_differences[23:34]) + [dip_differences[39]] + list(dip_differences[51:54])
+    bad_dips = list(dip_differences[21:32]) + [dip_differences[15]] + list(dip_differences[1:4])
 
     dip_differences = np.delete(dip_differences, delete_indices)
     dip_arange = np.delete(dip_arange, delete_indices)
+
+    # dip_differences = dip_differences[:22]
+    # dip_arange = dip_arange[:22]
 
     # peak_differences = np.delete(peak_differences, delete_indices)
     # peak_arange = np.delete(peak_arange, delete_indices)
@@ -345,17 +351,45 @@ def automated_dip_analysis():
     def energy_difference(v, w_0, x_0):
         return w_0 - 2 * w_0 * x_0 * (v + 1)
 
+    # Define the model function
+    def energy_difference_odr(w_0_x, v):
+        w_0, x_0 = w_0_x  # Unpack parameters (w_0, x_0)
+        return w_0 - 2 * w_0 * x_0 * (v + 1)
+
+    # Create a model object for ODR
+    model = Model(energy_difference_odr)
+
+    # Prepare data (dip_arange, dip_differences)
+    data = RealData(dip_arange, dip_differences, sy=np.zeros(len(dip_differences)) + 5e-8, sx=np.ones(len(dip_differences)))
+
+    # Set initial guess for parameters (w_0, x_0)
+    initial_guess = [0, -0.02]
+
+    # Set up ODR with the model and data
+    odr_instance = ODR(data, model, beta0=initial_guess)
+
+    # Run the ODR fitting
+    output = odr_instance.run()
+
+    # Extract fitted parameters and standard errors
+    w_0_fitted, x_0_fitted = output.beta
+    w_0_error, x_0_error = output.sd_beta
+
+    # Print fitted parameters and their errors
+    print(f"Fitted parameters: w_0 = {w_0_fitted}, x_0 = {x_0_fitted}")
+    print(f"Errors: w_0_error = {w_0_error}, x_0_error = {x_0_error}")
+
     # Initial guess for the parameters (w_0, x_0)
     initial_guess = [0, -0.02]
 
     # Perform the curve fit
     params, covariance = curve_fit(energy_difference, dip_arange, dip_differences, p0=initial_guess, maxfev=10000)
 
-    # Extract the fitted parameters
-    w_0_fitted, x_0_fitted = params
-    w_0_error, x_0_error = np.sqrt(np.diag(covariance))
+    # # Extract the fitted parameters
+    # w_0_fitted, x_0_fitted = params
+    # w_0_error, x_0_error = np.sqrt(np.diag(covariance))
 
-    print(f"Fitted parameters: w_0 = {round(w_0_fitted, 5)} ± {round(w_0_error, 5)},"
+    print(f"Fitted parameters: w_0 = {round(8065 * w_0_fitted, 5)} ± {round(8065 * w_0_error, 5)},"
           f" x_0 = {round(x_0_fitted, 5)} ± {round(x_0_error, 5)}")
 
     x_lin = np.linspace(-10, 60, 5)
@@ -364,20 +398,20 @@ def automated_dip_analysis():
 
     # plt.plot(wave_lengths, counts, c='k', label='average')
     # # plt.plot(wave_lengths, counts, c='y', label='no average', ls='--')
-    # plt.scatter(dips, dip_counts, label='dips')
-    # plt.scatter(peaks, peak_counts, label='peaks')
+    # plt.scatter(np.array(dips), dip_counts[::-1], label='dips')
+    # plt.scatter(np.array(peaks), peak_counts, label='peaks')
 
-    plt.fill_between(x_lin, energy_difference(x_lin, w_0_fitted + w_0_error, x_0_fitted + x_0_error),
-                     energy_difference(x_lin, w_0_fitted - w_0_error, x_0_fitted - x_0_error), ls='--', lw=0.5,
+    plt.fill_between(x_lin, 8065 * energy_difference(x_lin, w_0_fitted - w_0_error, x_0_fitted + x_0_error),
+                     8065 * energy_difference(x_lin, w_0_fitted + w_0_error, x_0_fitted - x_0_error), ls='--', lw=0.5,
                      color='r', alpha=0.2)
-    plt.plot(x_lin, energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1, label=r'')
-    plt.scatter(dip_arange, dip_differences, label='Data points')
+    plt.plot(x_lin, 8065 * energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1, label=r'')
+    plt.scatter(dip_arange, 8065 * dip_differences, label='Data points')
 
-    plt.scatter(delete_indices + offset, bad_dips, label='Excluded dips')
+    #plt.scatter(delete_indices + offset, 8065 * bad_dips, label='Excluded dips')
 
     plt.tight_layout()
     plt.legend()
-    # plt.xlim(-2, 55)
+    plt.xlim(0, 60)
     plt.show()
 
 
