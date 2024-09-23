@@ -10,6 +10,7 @@ from tools.reader import extract_data
 from tools.transformers import channel_to_wave_length, get_slice_indices, averager
 from calibration import calibrate_pixel
 from typing import Tuple, Optional
+from copy import copy
 
 
 # Questions:
@@ -73,6 +74,9 @@ def linearize_count_dips_halogen_lamp(degree: int, plot: bool = True) -> Optiona
 def linearize_count_dips_led_lamp(degree: int, plot: bool = True) -> Optional[Tuple[np.array, np.array]]:
     channels, counts = extract_data('../data/channel_data/LED_5ms_500avg_absorption_50grad.txt')
     background_channels, background_counts = extract_data('../data/channel_data/LED_5ms_100avg_lamp.txt')
+
+    return_channels = channels - background_channels
+
     # wave_lengths, wave_length_uncertainties = calibrate_pixel(channels)
     wave_lengths = [calibrate_pixel(channel)[0] for channel in channels]
     wave_length_uncertainties = [calibrate_pixel(channel)[1] for channel in channels]
@@ -119,7 +123,7 @@ def linearize_count_dips_led_lamp(degree: int, plot: bool = True) -> Optional[Tu
         plt.savefig('Isolation_absorption_spectrum_led_lamp.png', dpi=200)
         plt.show()
     else:
-        return channels, (difference_counts - y_fit) * max_counts
+        return return_channels, (difference_counts - y_fit) * max_counts
 
 
 # linearize_count_dips_led_lamp(23, True)
@@ -130,6 +134,8 @@ def linearize_count_dips_both_lamps(degree: int, plot: bool = True) -> Optional[
     _, background_counts_led = extract_data('../data/channel_data/LED_5ms_100avg_lamp.txt')
     _, counts_halogen = extract_data('../data/channel_data/halo_7ms_250avg_absorption_50grad.txt')
     _, background_counts_halogen = extract_data('../data/channel_data/halo_8ms_250avg_noabsorption.txt')
+
+    return_channels = copy(channels_led)
 
     # wave_lengths, wave_length_uncertainties = calibrate_pixel(channels_led)
     wave_lengths = [calibrate_pixel(channel)[0] for channel in channels_led]
@@ -180,7 +186,10 @@ def linearize_count_dips_both_lamps(degree: int, plot: bool = True) -> Optional[
         plt.savefig('Isolation_absorption_spectrum_led_lamp.png', dpi=200)
         plt.show()
     else:
-        return channels_led, (difference_counts - y_fit) * max_counts
+        print('dims:')
+        print(len(return_channels))
+        print(len((difference_counts - y_fit) * max_counts))
+        return return_channels[start_index:stop_index], (difference_counts - y_fit) * max_counts
 
 
 # linearize_count_dips_both_lamps(23, True)
@@ -289,15 +298,15 @@ def dip_analysis():
 # dip_analysis()
 
 
-def automated_dip_analysis(channels, counts, start, stop):
+def automated_dip_analysis(channels, counts):  # , start, stop):
     # wave_lengths, initial_counts = linearize_count_dips_both_lamps(23, False)
 
     # start_index, stop_index = get_slice_indices(wave_lengths, 510, 630)
 
     counts = averager(counts)
 
-    channels = channels[start:stop]
-    counts = counts[start:stop]
+    # channels = channels[start:stop]
+    # counts = counts[start:stop]
 
     dips = []
     dip_counts = []
@@ -317,11 +326,23 @@ def automated_dip_analysis(channels, counts, start, stop):
 
 
 def dip_sequence_analysis():
-    channels, counts, dips, dip_counts, peaks, peak_counts = automated_dip_analysis(
-        *linearize_count_dips_both_lamps(23, False), 570, 1500)
+    my_channels, my_counts = linearize_count_dips_both_lamps(23, False)
+    my_wave_lengths = [calibrate_pixel(channel)[0] for channel in my_channels]
 
-    wave_lengths = [calibrate_pixel(channel)[0] for channel in channels]
-    wave_length_uncertainties = [calibrate_pixel(channel)[1] for channel in channels]
+    start_index, stop_index = get_slice_indices(my_wave_lengths, 508, 635)
+    my_channels = my_channels[start_index:stop_index]
+    my_counts = my_counts[start_index:stop_index]
+
+    # print(my_channels, my_counts)
+    wave_lengths, counts, dips, dip_counts, peaks, peak_counts = automated_dip_analysis(my_channels, my_counts)
+    wave_lengths = [calibrate_pixel(channel)[0] for channel in my_channels]
+
+    print(min(wave_lengths), max(wave_lengths))
+
+    # start_index, stop_index = get_slice_indices(my_wave_lengths, 509, 620)
+
+    # wave_lengths = [calibrate_pixel(channel)[0] for channel in channels]
+    # wave_length_uncertainties = [calibrate_pixel(channel)[1] for channel in channels]
 
     print(dips, calibrate_pixel(55))
     print(min(wave_lengths), max(wave_lengths))
@@ -330,11 +351,13 @@ def dip_sequence_analysis():
     dip_position_uncertainties = [calibrate_pixel(dip)[1] for dip in dips]
     peaks = [calibrate_pixel(peak)[0] for peak in peaks]
 
+    print(dips)
+
     # Convert dip differences to energy differences
     dips = 1e-9 * np.array(dips[::-1])
     # dips = 1e-9 * np.array(dips)
     dip_energies = 6.242e18 * h * c / dips
-    dip_frequencies = 6.242e18 * h * c / dips   # * 1e-13
+    dip_frequencies = 6.242e18 * h * c / dips  # * 1e-13
 
     # Compute energy differences
     # dip_differences = np.diff(dip_energies, prepend=dips[0])[1:]
@@ -354,7 +377,7 @@ def dip_sequence_analysis():
     # dip_differences = 6.242e18 * h * c / dip_differences
 
     # Generate array of vibrational state indices
-    offset = 3
+    offset = 2
     dip_arange = np.arange(len(dip_differences)) + offset
     # peak_arange = np.arange(len(peak_differences))
 
@@ -368,7 +391,8 @@ def dip_sequence_analysis():
     dip_arange = np.delete(dip_arange, delete_indices)
     dip_frequency_uncertainties = np.delete(dip_frequency_uncertainties, delete_indices)
 
-    print(dip_frequency_uncertainties)
+    print(dip_differences[20:30])
+    print(dip_frequency_uncertainties[20:30])
 
     # dip_differences = dip_differences[:22]
     # dip_arange = dip_arange[:22]
@@ -397,8 +421,8 @@ def dip_sequence_analysis():
 
     # Prepare data (dip_arange, dip_differences)
     data = RealData(dip_arange, dip_differences)
-                    # sy=dip_frequency_uncertainties * 1e12)# ,
-                    # sx=np.ones(len(dip_differences)))
+    # sy=dip_frequency_uncertainties * 1e12)# ,
+    # sx=np.ones(len(dip_differences)))
 
     # Set initial guess for parameters (w_0, x_0)
     initial_guess = [0, -0.02]
@@ -412,6 +436,8 @@ def dip_sequence_analysis():
     # Extract fitted parameters and standard errors
     w_0_fitted, x_0_fitted = output.beta
     w_0_error, x_0_error = output.sd_beta
+
+    print(output.cov_beta)
 
     # Print fitted parameters and their errors
     print(f"Fitted parameters: w_0 = {w_0_fitted}, x_0 = {x_0_fitted}")
@@ -444,6 +470,17 @@ def dip_sequence_analysis():
     plt.ylabel(r"$\Delta G_{\nu^{''}}$ in [cm$^{-1}$]", fontsize=13)
     plt.xlabel(r"Vibrational quantum number $\nu^{''}$ + 1", fontsize=13)
 
+    # plt.title('Illustration dip counter-propagation', fontsize=16)
+    # plt.ylabel(r"Counts", fontsize=13)
+    # plt.xlabel(r"Wave length in [nm]", fontsize=13)
+
+    # count_range = max(counts) - min(counts)
+    # counts = counts / count_range
+    # dips = dips / count_range
+    # peaks = np.array(peaks) / count_range
+
+    # min()
+
     plt.plot(wave_lengths, counts, c='k', label='average')
     # plt.plot(wave_lengths, counts, c='y', label='no average', ls='--')
     plt.scatter(np.array(1e9 * dips), dip_counts[::-1], label='dips')
@@ -454,7 +491,7 @@ def dip_sequence_analysis():
     #                  color='r', alpha=0.2, label=r'1-$\sigma$ confidence band')
     # plt.plot(x_lin, 8065 * energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1,
     #          label='Fit with' + '\n' + fr'$\omega_0$ = {8065.5 * w_0_fitted:.2f} ± {8065.5 * w_0_error:.2f}' +
-    #                '\n' + fr'$x_0$ = {8065.5 * x_0_fitted:.2f} ± {8065.5 * x_0_error:.2f}')
+    #                '\n' + fr'$x_0$ = {x_0_fitted:.4f} ± {x_0_error:.4f}')
     # plt.scatter(dip_arange, 8065 * dip_differences, label='Data points')
     # plt.scatter(delete_indices + offset, 8065 * np.array(bad_dips), label='Excluded dips')
     # plt.errorbar(dip_arange, 8065 * dip_differences, yerr=dip_frequency_uncertainties, label='Errors', fmt='none',
@@ -462,10 +499,153 @@ def dip_sequence_analysis():
 
     plt.tight_layout()
     plt.legend()
-    # plt.xlim(0, 60)
+    plt.xlim(0, 60)
     # plt.xlim(540, 575)
+    # plt.savefig('dip_counter_propagation.png', dpi=200)
     # plt.savefig('Birge_sponer_absorption.png', dpi=200)
     plt.show()
 
 
 dip_sequence_analysis()
+
+
+def emission():
+    channels, counts = extract_data('../data/all_data/laser_254_1000ms_150avg_vertical_15.txt')
+    _, counts_1 = extract_data('../data/all_data/laser_254_800ms_80avg_vertical_11.txt')
+    _, counts_2 = extract_data('../data/all_data/laser_254_800ms_80avg_vertical_12.txt')
+    _, counts_3 = extract_data('../data/all_data/laser_254_800ms_80avg_vertical_13.txt')
+    _, counts_4 = extract_data('../data/all_data/laser_254_800ms_80avg_vertical_10.txt')
+    _, counts_5 = extract_data('../data/all_data/laser_254_1000ms_150avg_vertical_14.txt')
+    _, counts_6 = extract_data('../data/all_data/laser_254_1000ms_150avg_vertical_14.txt')
+
+    # plt.plot(channels, counts)
+    start_index, stop_index = 725, 2040
+    channels = channels[start_index:stop_index]
+    summed_counts = counts_1 + counts_2 + counts_3 + counts_4 + counts_5 + counts_6
+    summed_counts = averager(summed_counts)
+    summed_counts = summed_counts[start_index:stop_index]
+
+    wave_lengths = [calibrate_pixel(s_c)[0] for s_c in channels]
+    wave_length_uncertainties = [calibrate_pixel(s_c)[1] for s_c in channels]
+
+    v_line_positions = np.array([759.55, 796.2, 832.5, 870, 908.8, 948.22, 988.26, 1030.05, 1072.2, 1116.5, 1206.9,
+                                 1302.1, 1401.9, 1454.7])
+    position_errors = np.array([0.5, 2, 1, 1, 0.75, 1, 0.5, 0.75, 2, 1, 1, 2, 2, 3]) * 0.15
+
+    v_line_positions = np.array([calibrate_pixel(v_l_p)[0] for v_l_p in v_line_positions])
+    v_line_positions_errors = np.array([calibrate_pixel(v_l_p)[1] for v_l_p in v_line_positions])
+    position_errors = np.array([np.sqrt(position_errors[i] ** 2 + v_line_positions_errors[i] ** 2) for i in
+                       range(len(v_line_positions))])
+
+    print(len(v_line_positions))
+    print(list(v_line_positions))
+    print(len(position_errors))
+    print(list(position_errors))
+
+    my_frequencies = 6.242e18 * h * c / (1e-9 * np.array(v_line_positions))
+    my_diff = np.diff(my_frequencies, prepend=my_frequencies[0])[1:]
+    my_diff = 8065 * np.array([abs(m_d) for m_d in my_diff])
+
+    # peak_arange = np.concatenate(np.arange(1, len(my_diff) + 1), np.array([]))
+    peak_arange = np.array([i for i in range(2, 11)] + [11, 13, 15, 16])
+
+    plt.figure(figsize=(12, 5))
+
+    print(v_line_positions)
+    print(my_frequencies)
+    print(my_diff)
+
+    my_diff = [d / 2 if d > 300 else d for d in my_diff]
+
+    def energy_difference(v, w_0, x_0):
+        return w_0 - 2 * w_0 * x_0 * (v + 1)
+
+    x_lin = np.linspace(-1, 20)
+
+    # Perform the curve fit
+    params, covariance = curve_fit(energy_difference, peak_arange, my_diff, p0=[200, 0.1], maxfev=10000)
+
+    # # Extract the fitted parameters
+    w_0_fitted, x_0_fitted = params
+    w_0_error, x_0_error = np.sqrt(np.diag(covariance))
+
+    print('Cov\n')
+    print(covariance)
+
+    # delta_G_errors = [np.sqrt([i] ** 2 + dip_uncertainties[i + 1]) for i in
+    #  range(len(dip_uncertainties) - 2)] + [1e-18]
+
+    # Create the figure and two subplots (one above the other)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6))
+    fig.suptitle('Emission spectrum and Brige-Sponer plot', fontsize=16)
+
+    # First subplot (Fit with 1-sigma confidence band)
+    ax1.fill_between(x_lin,
+                     energy_difference(x_lin, w_0_fitted - w_0_error, x_0_fitted + x_0_error),
+                     energy_difference(x_lin, w_0_fitted + w_0_error, x_0_fitted - x_0_error),
+                     ls='--', lw=0.5, color='r', alpha=0.2, label=r'1-$\sigma$ confidence band')
+    ax1.plot(x_lin, energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1,
+             label='Fit with' + '\n' + fr'$\omega_0$ = {w_0_fitted:.2f} ± {w_0_error:.2f}' +
+                   '\n' + fr'$x_0$ = {x_0_fitted:.4f} ± {x_0_error:.4f}')
+    ax1.scatter(peak_arange, my_diff)
+    ax1.set_xlim(0, 18)
+    # ax1.errorbar(peak_arange, my_diff, yerr=dip_frequency_uncertainties, label='Errors', fmt='none',
+    #                         ecolor='k')
+    ax1.legend()
+
+    # Second subplot (Summed counts and vertical lines with errors)
+    ax2.plot(wave_lengths, summed_counts - 8150, label='Averaged data')
+    for x, err in zip(v_line_positions, position_errors):
+        if x == wave_lengths[-1]:
+            ax2.axvline(x=x, color='r', linestyle='--', linewidth=0.5, label='Dip center')
+            ax2.fill_betweenx(np.linspace(-1000, 60000, 2), x - err, x + err, color='red', alpha=0.2,
+                              label=r"1-$\sigma$ confidence band")
+        else:
+            ax2.axvline(x=x, color='r', linestyle='--', linewidth=0.5)
+            ax2.fill_betweenx(np.linspace(-1000, 60000, 2), x - err, x + err, color='red', alpha=0.2)
+    ax2.set_ylim(-1000, 60000)
+
+    # Add legends and labels where necessary
+    ax2.legend()
+
+    # Set labels, shared x-axis between subplots
+    ax2.set_xlabel('Wavelength in [nm]', fontsize=12)
+    ax1.set_ylabel(r"$\Delta G_{\nu^{''}}$ in [cm$^{-1}$]", fontsize=12)
+
+    ax1.set_xlabel(r"Vibrational quantum number $\nu^{''}$ + 1", fontsize=12)
+    ax2.set_ylabel('Summed Counts', fontsize=12)
+
+    # Tight layout to adjust spacing
+    plt.tight_layout()
+
+    # Show the plot
+    plt.savefig('emission_plot_with_brige.png', dpi=200)
+    plt.show()
+
+    # plt.fill_between(x_lin, energy_difference(x_lin, w_0_fitted - w_0_error, x_0_fitted + x_0_error),
+    #                  energy_difference(x_lin, w_0_fitted + w_0_error, x_0_fitted - x_0_error), ls='--', lw=0.5,
+    #                  color='r', alpha=0.2, label=r'1-$\sigma$ confidence band')
+    # plt.plot(x_lin, energy_difference(x_lin, w_0_fitted, x_0_fitted), c='k', lw=1,
+    #          label='Fit with' + '\n' + fr'$\omega_0$ = {w_0_fitted:.2f} ± {w_0_error:.2f}' +
+    #                '\n' + fr'$x_0$ = {x_0_fitted:.4f} ± {x_0_error:.4f}')
+    #
+    # plt.scatter(peak_arange, my_diff)
+
+
+    # plt.plot(wave_lengths, summed_counts - 8150)
+    #
+    # for x, err in zip(v_line_positions, position_errors):
+    #     plt.axvline(x=x, color='r', linestyle='--', linewidth=0.5)
+    #     # Fill between x-error and x+error for vertical lines
+    #     plt.fill_betweenx(np.linspace(-1000, 60000, 100), x - err, x + err, color='red', alpha=0.2)
+    #
+    # plt.ylim(-1000, 60000)
+
+
+    # plt.legend()
+    # plt.show()
+
+    return None
+
+
+emission()

@@ -8,10 +8,10 @@ h = 6.62607015e-34     # Planck's constant in Js
 x_e = 2.666e-10        # Equilibrium distance in meters
 
 # Your measurements
-omega_0 = 200          # Measured value of omega_0 in cm^-1
-delta_omega_0 = 2      # Uncertainty of omega_0
-x0 = 0.001             # Measured value of x0 (dimensionless)
-delta_x0 = 0.0001      # Uncertainty of x0
+omega_0 = 122.1          # Measured value of omega_0 in cm^-1
+delta_omega_0 = 1.8      # Uncertainty of omega_0
+x0 = 45.33 / 8065             # Measured value of x0 (dimensionless)
+delta_x0 = 1.01 / 8065      # Uncertainty of x0
 cov_omega0_x0 = 0.001  # Covariance between omega_0 and x0
 
 # Calculation of De
